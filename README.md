@@ -143,3 +143,32 @@ letiteach-physics/
 ```
 
 Другой каталог можно указать параметром `--output` или `-OutputDirectory`.
+
+## Преобразование MP4 в MP3
+
+Конвертеры обрабатывают все MP4-файлы из каталога `letiteach-physics` и сохраняют аудио в `letiteach-audio`. По умолчанию используется mono MP3 с битрейтом 96 кбит/с. Для лекций этого достаточно, а файлы получаются существенно меньше исходного видео.
+
+Windows:
+
+```powershell
+.\convert-to-mp3.ps1
+```
+
+Linux и macOS:
+
+```bash
+chmod +x convert-to-mp3.sh
+./convert-to-mp3.sh
+```
+
+Выбор другого битрейта и каталогов:
+
+```powershell
+.\convert-to-mp3.ps1 -InputDirectory .\videos -OutputDirectory .\audio -Bitrate 128k
+```
+
+```bash
+./convert-to-mp3.sh --input ./videos --output ./audio --bitrate 128k
+```
+
+Уже существующие MP3-файлы пропускаются и не перезаписываются.
