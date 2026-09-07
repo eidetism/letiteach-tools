@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LETIteach Question Navigator
 // @namespace    https://github.com/eidetism/letiteach-downloader
-// @version      0.1.3
+// @version      0.1.4
 // @description  Shows embedded LETIteach video questions one by one without changing course completion data.
 // @author       eidetism
 // @match        https://open.etu.ru/courses/*/courseware/*
@@ -30,16 +30,21 @@
             '.' + HIDDEN_CLASS + '{display:none!important;}' +
             '.' + ACTIVE_CLASS + '{display:block!important;visibility:visible!important;' +
                 'opacity:1!important;}' +
-            '#' + PANEL_ID + '{position:relative;z-index:10;' +
-                'display:flex;align-items:center;gap:8px;flex-wrap:wrap;' +
-                'padding:10px 12px;margin:12px 0;background:#151515;' +
+            '#' + PANEL_ID + '{position:fixed;top:50%;right:16px;' +
+                'transform:translateY(-50%);z-index:2147483647;' +
+                'display:flex;flex-direction:column;align-items:stretch;gap:8px;' +
+                'max-width:210px;padding:12px;background:#151515;' +
                 'color:#fff;border:1px solid #444;border-radius:8px;' +
+                'box-shadow:0 6px 24px rgba(0,0,0,.35);' +
                 'font:14px/1.4 Arial,sans-serif;}' +
             '#' + PANEL_ID + ' button{padding:6px 10px;border:1px solid #666;' +
                 'border-radius:6px;background:#2b2b2b;color:#fff;cursor:pointer;}' +
             '#' + PANEL_ID + ' button:disabled{opacity:.45;cursor:not-allowed;}' +
             '#' + PANEL_ID + ' .letiteach-counter{min-width:110px;text-align:center;}' +
-            '#' + PANEL_ID + ' .letiteach-status{color:#b8e986;}';
+            '#' + PANEL_ID + ' .letiteach-status{color:#b8e986;text-align:center;}' +
+            '@media(max-width:1400px){#' + PANEL_ID + '{top:auto;right:12px;' +
+                'bottom:12px;left:12px;transform:none;max-width:none;' +
+                'flex-direction:row;align-items:center;flex-wrap:wrap;}}';
         document.head.appendChild(style);
     }
 
@@ -144,7 +149,7 @@
         currentIndex = 0;
     }
 
-    function createPanel(anchor) {
+    function createPanel() {
         var panel = document.createElement('div');
         panel.id = PANEL_ID;
         panel.innerHTML =
@@ -169,7 +174,7 @@
             }
         });
 
-        anchor.parentNode.insertBefore(panel, anchor);
+        document.body.appendChild(panel);
     }
 
     function initializeNavigator() {
@@ -202,7 +207,7 @@
             setHidden(element, true);
         });
 
-        createPanel(initializedRoot === document ? getQuestionRoot(questions[0]) : initializedRoot);
+        createPanel();
         showQuestion(0);
         console.info('[LETIteach Question Navigator] Найдено вопросов: ' + questions.length);
     }
