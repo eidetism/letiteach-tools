@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LETIteach Question Navigator
 // @namespace    https://github.com/eidetism/letiteach-downloader
-// @version      0.1.4
+// @version      0.2.0
 // @description  Shows embedded LETIteach video questions one by one without changing course completion data.
 // @author       eidetism
 // @match        https://open.etu.ru/courses/*/courseware/*
@@ -18,6 +18,7 @@
     var initializedRoot = null;
     var questions = [];
     var currentIndex = 0;
+    var playbackTimer = null;
 
     function addStyles() {
         if (document.getElementById(PANEL_ID + '-styles')) {
@@ -85,6 +86,87 @@
         nextButton.disabled = currentIndex === questions.length - 1;
     }
 
+    function formatTime(seconds) {
+        var safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+        var minutes = Math.floor(safeSeconds / 60);
+        var remainder = safeSeconds % 60;
+
+        return minutes + ':' + String(remainder).padStart(2, '0');
+    }
+
+    function updatePlaybackStatus(video) {
+        var panel = document.getElementById(PANEL_ID);
+        var status;
+        var watchButton;
+
+        if (!panel) {
+            return;
+        }
+
+        status = panel.querySelector('.letiteach-status');
+        watchButton = panel.querySelector('[data-action="watch"]');
+
+        if (video.ended) {
+            window.clearInterval(playbackTimer);
+            playbackTimer = null;
+            status.textContent = 'Видео дошло до конца';
+            watchButton.textContent = 'Просмотр ×8';
+            return;
+        }
+
+        if (video.paused) {
+            window.clearInterval(playbackTimer);
+            playbackTimer = null;
+            status.textContent = 'Видео на паузе: ' + formatTime(video.currentTime) +
+                ' / ' + formatTime(video.duration);
+            watchButton.textContent = 'Продолжить ×8';
+            return;
+        }
+
+        status.textContent = 'Видео ×' + video.playbackRate + ': ' +
+            formatTime(video.currentTime) + ' / ' + formatTime(video.duration);
+        watchButton.textContent = 'Пауза видео';
+    }
+
+    function toggleFastPlayback() {
+        var video = initializedRoot && initializedRoot.querySelector &&
+            initializedRoot.querySelector('video');
+        var panel = document.getElementById(PANEL_ID);
+        var status = panel && panel.querySelector('.letiteach-status');
+
+        if (!video) {
+            if (status) {
+                status.textContent = 'Видеоплеер не найден';
+            }
+            return;
+        }
+
+        if (!video.paused && !video.ended) {
+            video.pause();
+            updatePlaybackStatus(video);
+            return;
+        }
+
+        if (video.ended) {
+            video.currentTime = 0;
+        }
+
+        video.muted = true;
+        video.playbackRate = 8;
+
+        video.play().then(function () {
+            window.clearInterval(playbackTimer);
+            playbackTimer = window.setInterval(function () {
+                updatePlaybackStatus(video);
+            }, 500);
+            updatePlaybackStatus(video);
+        }).catch(function (error) {
+            if (status) {
+                status.textContent = 'Не удалось запустить видео: ' + error.message;
+            }
+        });
+    }
+
     function showQuestion(index) {
         var questionRoots;
         var activeQuestion;
@@ -123,7 +205,17 @@
     }
 
     function restoreLecture() {
+        var video = initializedRoot && initializedRoot.querySelector &&
+            initializedRoot.querySelector('video');
         var panel = document.getElementById(PANEL_ID);
+
+        window.clearInterval(playbackTimer);
+        playbackTimer = null;
+
+        if (video) {
+            video.playbackRate = 1;
+        }
+
         if (panel) {
             panel.remove();
         }
@@ -156,8 +248,9 @@
             '<button type="button" data-action="previous">Назад</button>' +
             '<span class="letiteach-counter"></span>' +
             '<button type="button" data-action="next">Следующий вопрос</button>' +
+            '<button type="button" data-action="watch">Просмотр ×8</button>' +
             '<button type="button" data-action="restore">Показать лекцию</button>' +
-            '<span class="letiteach-status">Видео не отмечается просмотренным</span>';
+            '<span class="letiteach-status">Ускоренный просмотр не запущен</span>';
 
         panel.addEventListener('click', function (event) {
             var button = event.target.closest('button[data-action]');
@@ -169,6 +262,8 @@
                 showQuestion(currentIndex - 1);
             } else if (button.dataset.action === 'next') {
                 showQuestion(currentIndex + 1);
+            } else if (button.dataset.action === 'watch') {
+                toggleFastPlayback();
             } else if (button.dataset.action === 'restore') {
                 restoreLecture();
             }
