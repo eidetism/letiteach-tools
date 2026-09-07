@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LETIteach Question Navigator
 // @namespace    https://github.com/eidetism/letiteach-downloader
-// @version      0.1.2
+// @version      0.1.3
 // @description  Shows embedded LETIteach video questions one by one without changing course completion data.
 // @author       eidetism
 // @match        https://open.etu.ru/courses/*/courseware/*
@@ -30,7 +30,7 @@
             '.' + HIDDEN_CLASS + '{display:none!important;}' +
             '.' + ACTIVE_CLASS + '{display:block!important;visibility:visible!important;' +
                 'opacity:1!important;}' +
-            '#' + PANEL_ID + '{position:sticky;top:12px;z-index:10000;' +
+            '#' + PANEL_ID + '{position:relative;z-index:10;' +
                 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;' +
                 'padding:10px 12px;margin:12px 0;background:#151515;' +
                 'color:#fff;border:1px solid #444;border-radius:8px;' +
@@ -144,7 +144,7 @@
         currentIndex = 0;
     }
 
-    function createPanel(firstQuestionRoot) {
+    function createPanel(anchor) {
         var panel = document.createElement('div');
         panel.id = PANEL_ID;
         panel.innerHTML =
@@ -169,7 +169,7 @@
             }
         });
 
-        firstQuestionRoot.parentNode.insertBefore(panel, firstQuestionRoot);
+        anchor.parentNode.insertBefore(panel, anchor);
     }
 
     function initializeNavigator() {
@@ -202,7 +202,7 @@
             setHidden(element, true);
         });
 
-        createPanel(getQuestionRoot(questions[0]));
+        createPanel(initializedRoot === document ? getQuestionRoot(questions[0]) : initializedRoot);
         showQuestion(0);
         console.info('[LETIteach Question Navigator] Найдено вопросов: ' + questions.length);
     }
