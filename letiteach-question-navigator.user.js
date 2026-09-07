@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LETIteach Question Navigator
 // @namespace    https://github.com/eidetism/letiteach-downloader
-// @version      0.2.0
+// @version      0.2.1
 // @description  Shows embedded LETIteach video questions one by one without changing course completion data.
 // @author       eidetism
 // @match        https://open.etu.ru/courses/*/courseware/*
@@ -19,6 +19,7 @@
     var questions = [];
     var currentIndex = 0;
     var playbackTimer = null;
+    var questionModeActive = false;
 
     function addStyles() {
         if (document.getElementById(PANEL_ID + '-styles')) {
@@ -128,6 +129,22 @@
         watchButton.textContent = 'Пауза видео';
     }
 
+    function leaveQuestionModeForPlayback() {
+        questionModeActive = false;
+
+        questions.forEach(function (question) {
+            var root = getQuestionRoot(question);
+            root.classList.remove(HIDDEN_CLASS, ACTIVE_CLASS);
+            question.classList.remove(HIDDEN_CLASS, ACTIVE_CLASS);
+        });
+
+        if (initializedRoot) {
+            getMediaElements(initializedRoot).forEach(function (element) {
+                setHidden(element, false);
+            });
+        }
+    }
+
     function toggleFastPlayback() {
         var video = initializedRoot && initializedRoot.querySelector &&
             initializedRoot.querySelector('video');
@@ -151,20 +168,32 @@
             video.currentTime = 0;
         }
 
+        if (questionModeActive) {
+            leaveQuestionModeForPlayback();
+        }
+
         video.muted = true;
         video.playbackRate = 8;
 
-        video.play().then(function () {
-            window.clearInterval(playbackTimer);
-            playbackTimer = window.setInterval(function () {
+        window.setTimeout(function () {
+            video.play().then(function () {
+                window.clearInterval(playbackTimer);
+                playbackTimer = window.setInterval(function () {
+                    updatePlaybackStatus(video);
+                }, 500);
                 updatePlaybackStatus(video);
-            }, 500);
-            updatePlaybackStatus(video);
-        }).catch(function (error) {
-            if (status) {
-                status.textContent = 'Не удалось запустить видео: ' + error.message;
-            }
-        });
+            }).catch(function (error) {
+                if (!status) {
+                    return;
+                }
+
+                if (error && error.name === 'AbortError') {
+                    status.textContent = 'LETIteach остановил видео. Ответьте на открытый вопрос и нажмите ×8 ещё раз.';
+                } else {
+                    status.textContent = 'Не удалось запустить видео: ' + error.message;
+                }
+            });
+        }, 100);
     }
 
     function showQuestion(index) {
@@ -174,6 +203,23 @@
 
         if (!questions.length) {
             return;
+        }
+
+        questionModeActive = true;
+
+        var video = initializedRoot && initializedRoot.querySelector &&
+            initializedRoot.querySelector('video');
+        if (video) {
+            video.pause();
+        }
+
+        window.clearInterval(playbackTimer);
+        playbackTimer = null;
+
+        if (initializedRoot) {
+            getMediaElements(initializedRoot).forEach(function (element) {
+                setHidden(element, true);
+            });
         }
 
         currentIndex = Math.max(0, Math.min(index, questions.length - 1));
@@ -239,6 +285,7 @@
         initializedRoot = null;
         questions = [];
         currentIndex = 0;
+        questionModeActive = false;
     }
 
     function createPanel() {
