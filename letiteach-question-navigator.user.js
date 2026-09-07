@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LETIteach Question Navigator
-// @namespace    https://github.com/eidetism/letiteach-downloader
-// @version      0.3.0
+// @namespace    https://github.com/eidetism/letiteach-tools
+// @version      0.3.1
 // @description  Shows embedded LETIteach video questions one by one without changing course completion data.
 // @author       eidetism
 // @match        https://open.etu.ru/courses/*/courseware/*
