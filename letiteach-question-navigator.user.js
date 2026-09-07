@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LETIteach Question Navigator
 // @namespace    https://github.com/eidetism/letiteach-downloader
-// @version      0.1.0
+// @version      0.1.1
 // @description  Shows embedded LETIteach video questions one by one without changing course completion data.
 // @author       eidetism
 // @match        https://open.etu.ru/courses/*/courseware/*
@@ -56,9 +56,12 @@
 
     function getMediaElements(root) {
         return Array.prototype.slice.call(root.querySelectorAll(
-            'video, .video-player, .video-player-pre, .video-player-post, ' +
-            '.video-controls, .video-controls-wrapper, .poster'
-        ));
+            'video, .video-controls, .video-controls-wrapper, .poster'
+        )).filter(function (element) {
+            return !questions.some(function (question) {
+                return element.contains(question);
+            });
+        });
     }
 
     function updatePanel() {
