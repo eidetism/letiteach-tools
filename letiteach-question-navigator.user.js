@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LETIteach Question Navigator
 // @namespace    https://github.com/eidetism/letiteach-downloader
-// @version      0.2.1
+// @version      0.3.0
 // @description  Shows embedded LETIteach video questions one by one without changing course completion data.
 // @author       eidetism
 // @match        https://open.etu.ru/courses/*/courseware/*
@@ -58,6 +58,12 @@
         element.classList.toggle(HIDDEN_CLASS, hidden);
     }
 
+    function setText(element, value) {
+        if (element && element.textContent !== value) {
+            element.textContent = value;
+        }
+    }
+
     function getQuestionRoot(question) {
         return question.closest('.in-video-problem-wrapper') || question.parentElement;
     }
@@ -82,7 +88,14 @@
         var previousButton = panel.querySelector('[data-action="previous"]');
         var nextButton = panel.querySelector('[data-action="next"]');
 
-        counter.textContent = 'Вопрос ' + (currentIndex + 1) + ' из ' + questions.length;
+        if (!questions.length) {
+            setText(counter, 'Вопросы не найдены');
+            previousButton.disabled = true;
+            nextButton.disabled = true;
+            return;
+        }
+
+        setText(counter, 'Вопрос ' + (currentIndex + 1) + ' из ' + questions.length);
         previousButton.disabled = currentIndex === 0;
         nextButton.disabled = currentIndex === questions.length - 1;
     }
@@ -250,42 +263,23 @@
         });
     }
 
-    function restoreLecture() {
+    function showLecture() {
         var video = initializedRoot && initializedRoot.querySelector &&
             initializedRoot.querySelector('video');
         var panel = document.getElementById(PANEL_ID);
+        var status = panel && panel.querySelector('.letiteach-status');
 
-        window.clearInterval(playbackTimer);
-        playbackTimer = null;
-
-        if (video) {
-            video.playbackRate = 1;
-        }
-
-        if (panel) {
-            panel.remove();
-        }
-
-        questions.forEach(function (question) {
-            var root = getQuestionRoot(question);
-            root.classList.remove(HIDDEN_CLASS, ACTIVE_CLASS);
-            question.classList.remove(HIDDEN_CLASS, ACTIVE_CLASS);
-        });
-
-        if (initializedRoot) {
-            getMediaElements(initializedRoot).forEach(function (element) {
-                setHidden(element, false);
-            });
-        }
+        leaveQuestionModeForPlayback();
 
         document.querySelectorAll('.sequence-bottom').forEach(function (element) {
             setHidden(element, false);
         });
 
-        initializedRoot = null;
-        questions = [];
-        currentIndex = 0;
-        questionModeActive = false;
+        if (video && !video.paused) {
+            updatePlaybackStatus(video);
+        } else if (status) {
+            status.textContent = 'Лекция показана. Можно включить ×8';
+        }
     }
 
     function createPanel() {
@@ -312,7 +306,7 @@
             } else if (button.dataset.action === 'watch') {
                 toggleFastPlayback();
             } else if (button.dataset.action === 'restore') {
-                restoreLecture();
+                showLecture();
             }
         });
 
@@ -320,37 +314,77 @@
     }
 
     function initializeNavigator() {
-        if (document.getElementById(PANEL_ID)) {
+        var panel = document.getElementById(PANEL_ID);
+        var status;
+        var foundQuestions;
+        var foundRoot;
+        var sameQuestions;
+
+        if (!panel) {
+            createPanel();
+            panel = document.getElementById(PANEL_ID);
+        }
+
+        status = panel.querySelector('.letiteach-status');
+        foundQuestions = Array.prototype.slice.call(document.querySelectorAll(
+            '.in-video-problem-wrapper .xblock-student_view-problem'
+        ));
+        foundRoot = (foundQuestions[0] && foundQuestions[0].closest('.video')) ||
+            document.querySelector('.video');
+
+        if (!foundRoot) {
+            window.clearInterval(playbackTimer);
+            playbackTimer = null;
+            initializedRoot = null;
+            questions = [];
+            currentIndex = 0;
+            questionModeActive = false;
+            updatePanel();
+            setText(status, 'Ожидание видеоблока');
             return;
         }
 
-        var foundQuestions = Array.prototype.slice.call(document.querySelectorAll(
-            '.in-video-problem-wrapper .xblock-student_view-problem'
-        ));
+        sameQuestions = initializedRoot === foundRoot &&
+            questions.length === foundQuestions.length &&
+            questions.every(function (question, index) {
+                return question === foundQuestions[index];
+            });
 
-        if (!foundQuestions.length) {
+        if (sameQuestions) {
             return;
+        }
+
+        window.clearInterval(playbackTimer);
+        playbackTimer = null;
+
+        questions.forEach(function (question) {
+            var root = getQuestionRoot(question);
+            root.classList.remove(HIDDEN_CLASS, ACTIVE_CLASS);
+            question.classList.remove(HIDDEN_CLASS, ACTIVE_CLASS);
+        });
+
+        if (initializedRoot) {
+            getMediaElements(initializedRoot).forEach(function (element) {
+                setHidden(element, false);
+            });
         }
 
         questions = foundQuestions;
         currentIndex = 0;
-        initializedRoot = questions[0].closest('.video') || document;
+        initializedRoot = foundRoot;
 
-        getMediaElements(initializedRoot).forEach(function (element) {
-            setHidden(element, true);
-        });
+        if (questions.length) {
+            document.querySelectorAll('.sequence-bottom').forEach(function (element) {
+                setHidden(element, true);
+            });
 
-        var video = initializedRoot.querySelector && initializedRoot.querySelector('video');
-        if (video) {
-            video.pause();
+            showQuestion(0);
+        } else {
+            questionModeActive = false;
+            updatePanel();
+            setText(status, 'Вопросы не найдены. Можно включить ×8');
         }
 
-        document.querySelectorAll('.sequence-bottom').forEach(function (element) {
-            setHidden(element, true);
-        });
-
-        createPanel();
-        showQuestion(0);
         console.info('[LETIteach Question Navigator] Найдено вопросов: ' + questions.length);
     }
 
