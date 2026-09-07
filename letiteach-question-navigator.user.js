@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         LETIteach Question Navigator
 // @namespace    https://github.com/eidetism/letiteach-downloader
-// @version      0.1.1
+// @version      0.1.2
 // @description  Shows embedded LETIteach video questions one by one without changing course completion data.
 // @author       eidetism
 // @match        https://open.etu.ru/courses/*/courseware/*
@@ -28,7 +28,8 @@
         style.id = PANEL_ID + '-styles';
         style.textContent =
             '.' + HIDDEN_CLASS + '{display:none!important;}' +
-            '.' + ACTIVE_CLASS + '{display:block!important;}' +
+            '.' + ACTIVE_CLASS + '{display:block!important;visibility:visible!important;' +
+                'opacity:1!important;}' +
             '#' + PANEL_ID + '{position:sticky;top:12px;z-index:10000;' +
                 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;' +
                 'padding:10px 12px;margin:12px 0;background:#151515;' +
@@ -80,20 +81,37 @@
     }
 
     function showQuestion(index) {
+        var questionRoots;
+        var activeQuestion;
+        var activeRoot;
+
         if (!questions.length) {
             return;
         }
 
         currentIndex = Math.max(0, Math.min(index, questions.length - 1));
 
-        questions.forEach(function (question, questionIndex) {
-            var root = getQuestionRoot(question);
-            root.classList.toggle(ACTIVE_CLASS, questionIndex === currentIndex);
-            root.classList.toggle(HIDDEN_CLASS, questionIndex !== currentIndex);
+        questionRoots = questions.map(getQuestionRoot);
+
+        questionRoots.forEach(function (root) {
+            root.classList.remove(ACTIVE_CLASS);
+            root.classList.add(HIDDEN_CLASS);
         });
 
+        questions.forEach(function (question) {
+            question.classList.remove(ACTIVE_CLASS);
+            question.classList.add(HIDDEN_CLASS);
+        });
+
+        activeQuestion = questions[currentIndex];
+        activeRoot = getQuestionRoot(activeQuestion);
+        activeRoot.classList.remove(HIDDEN_CLASS);
+        activeRoot.classList.add(ACTIVE_CLASS);
+        activeQuestion.classList.remove(HIDDEN_CLASS);
+        activeQuestion.classList.add(ACTIVE_CLASS);
+
         updatePanel();
-        getQuestionRoot(questions[currentIndex]).scrollIntoView({
+        activeRoot.scrollIntoView({
             behavior: 'smooth',
             block: 'center'
         });
@@ -108,6 +126,7 @@
         questions.forEach(function (question) {
             var root = getQuestionRoot(question);
             root.classList.remove(HIDDEN_CLASS, ACTIVE_CLASS);
+            question.classList.remove(HIDDEN_CLASS, ACTIVE_CLASS);
         });
 
         if (initializedRoot) {
