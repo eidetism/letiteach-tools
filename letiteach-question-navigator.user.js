@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         LETIteach Question Navigator
 // @namespace    https://github.com/eidetism/letiteach-tools
-// @version      0.3.1
-// @description  Shows embedded LETIteach video questions one by one without changing course completion data.
+// @version      0.4.0
+// @description  Shows embedded LETIteach video questions one by one and can mark the current lecture as watched.
 // @author       eidetism
 // @match        https://open.etu.ru/courses/*/courseware/*
 // @grant        none
@@ -106,6 +106,128 @@
         var remainder = safeSeconds % 60;
 
         return minutes + ':' + String(remainder).padStart(2, '0');
+    }
+
+    function getVideoLength(root) {
+        var video = root.querySelector('video');
+        var timeLabel = root.querySelector('.vidtime');
+        var parts;
+
+        if (video && Number.isFinite(video.duration) && video.duration > 0) {
+            return video.duration;
+        }
+
+        parts = timeLabel && timeLabel.textContent.split(' / ')[1];
+        if (!parts) {
+            return 0;
+        }
+
+        return parts.trim().split(':').reduce(function (total, part) {
+            return total * 60 + Number(part);
+        }, 0) || 0;
+    }
+
+    function getCsrfToken() {
+        var cookie = document.cookie.split('; ').find(function (row) {
+            return row.indexOf('csrftoken=') === 0;
+        });
+
+        return cookie ? cookie.split('=')[1] : '';
+    }
+
+    function fillWatchTimes(length) {
+        var tracker = window.HXVideoWatch;
+        var filledSlots = {};
+        var added = 0;
+        var time;
+
+        if (!tracker || !Array.isArray(tracker.watch_times)) {
+            return -1;
+        }
+
+        tracker.video_length = length;
+        tracker.watch_times.forEach(function (value) {
+            filledSlots[Math.floor(value * 2)] = true;
+        });
+
+        for (time = 0; time < length; time += 0.5) {
+            if (!filledSlots[time * 2]) {
+                tracker.watch_times.push(parseFloat((time + Math.random() / 10).toFixed(6)));
+                added++;
+            }
+        }
+
+        return added;
+    }
+
+    function markVideoCompleted(videoRoot) {
+        var root = videoRoot.closest('[data-metadata]') ||
+            videoRoot.querySelector('[data-metadata]') || videoRoot;
+        var state = window.jQuery && window.jQuery(root).data('video-player-state');
+        var handler = state && state.completionHandler;
+        var video = root.querySelector('video');
+        var metadata;
+
+        if (handler && typeof handler.markCompletion === 'function') {
+            handler.markCompletion(video ? video.currentTime : 0);
+            return Promise.resolve('штатный обработчик');
+        }
+
+        try {
+            metadata = JSON.parse(root.dataset.metadata || '{}');
+        } catch (error) {
+            return Promise.reject(new Error('не удалось прочитать data-metadata'));
+        }
+
+        if (!metadata.publishCompletionUrl) {
+            return Promise.reject(new Error('нет publishCompletionUrl'));
+        }
+
+        return fetch(metadata.publishCompletionUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ completion: 1 }),
+            credentials: 'include'
+        }).then(function (response) {
+            if (!response.ok) {
+                throw new Error('сервер ответил ' + response.status);
+            }
+
+            return 'POST completion';
+        });
+    }
+
+    function markLectureWatched() {
+        var panel = document.getElementById(PANEL_ID);
+        var status = panel && panel.querySelector('.letiteach-status');
+        var root = initializedRoot;
+        var length;
+        var added;
+        var trackerText;
+
+        if (!root) {
+            setText(status, 'Видеоблок не найден');
+            return;
+        }
+
+        length = getVideoLength(root);
+        added = length ? fillWatchTimes(length) : -1;
+        trackerText = added < 0 ? 'трекер % не найден' : 'трекер %: +' + added + ' точек';
+        setText(status, 'Отправка отметки...');
+
+        markVideoCompleted(root).then(function (method) {
+            setText(status, 'Отмечено (' + method + '), ' + trackerText +
+                (questions.length ? '' : '. Вопросов нет'));
+        }).catch(function (error) {
+            setText(status, 'Отметка не отправлена: ' + error.message + ', ' + trackerText);
+        });
+
+        if (questions.length) {
+            showQuestion(0);
+        }
     }
 
     function updatePlaybackStatus(video) {
@@ -290,6 +412,7 @@
             '<span class="letiteach-counter"></span>' +
             '<button type="button" data-action="next">Следующий вопрос</button>' +
             '<button type="button" data-action="watch">Просмотр ×8</button>' +
+            '<button type="button" data-action="complete">Отметить просмотренной</button>' +
             '<button type="button" data-action="restore">Показать лекцию</button>' +
             '<span class="letiteach-status">Ускоренный просмотр не запущен</span>';
 
@@ -305,6 +428,8 @@
                 showQuestion(currentIndex + 1);
             } else if (button.dataset.action === 'watch') {
                 toggleFastPlayback();
+            } else if (button.dataset.action === 'complete') {
+                markLectureWatched();
             } else if (button.dataset.action === 'restore') {
                 showLecture();
             }
